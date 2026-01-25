@@ -1,5 +1,9 @@
 # 01 - OLED DHT11 Mini Dashboard
 
+## Φωτογραφία σύνδεσης
+![arduino_02](arduino_02.jpg)
+
+
 Μικρό Arduino project για αρχάριους που εμφανίζει σε OLED 128x64:
 
 - Scrolling τίτλο στην πάνω μπάρα
