@@ -1,6 +1,6 @@
 # 01 - OLED DHT11 Mini Dashboard
 
-## Φωτογραφία σύνδεσης
+## Α. Φωτογραφία σύνδεσης
 ![arduino_02](arduino_02.jpg)
 
 
@@ -12,20 +12,20 @@
 - Εικονίδια (θερμόμετρο + σταγόνα)
 - Χωρίς delay() (timers με millis)
 
-## Υλικά
+## Β. Υλικά
 - Arduino UNO/Nano
 - OLED SSD1306 128x64 (I2C, 0x3C)
 - DHT11
 - Καλώδια
 
-## Συνδεσμολογία
-### OLED
+## Γ. Συνδεσμολογία
+### Γ.1 OLED
 - VCC → 5V
 - GND → GND
 - SDA → A4
 - SCL → A5
 
-### DHT11
+### Γ.2 DHT11
 - VCC → 5V
 - GND → GND
 - DATA → D2
