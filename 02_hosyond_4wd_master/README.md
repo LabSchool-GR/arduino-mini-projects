@@ -78,6 +78,11 @@ Manual (μόνο σε MANUAL):
 Help:
 - `H` = εμφανίζει οδηγίες (Serial)
 
+<p align="center">
+  <img src="Hosyond_4WD_Smart_Robot_Car_Kit_2.JPG" alt="Hosyond 4WD Robot"><br>
+  <em>Serial Monitor του Arduino IDE</em>
+</p>
+
 ### IR Remote (NEC cmd mapping)
 Movement:
 - UP / DOWN / LEFT / RIGHT
