@@ -1,6 +1,6 @@
 # Hosyond 4WD Smart Robot Car Kit — MASTER v2.5 (Teacher Edition)
 
-Ένα “όλα-σε-ένα” εκπαιδευτικό project για Arduino 4WD robot car με 3 βασικές λειτουργίες:
+Ένα εκπαιδευτικό project για Arduino 4WD robot car με 3 βασικές λειτουργίες:
 - **MANUAL** (IR Remote + Bluetooth + Serial)
 - **LINE TRACKING** (3 αισθητήρες γραμμής)
 - **OBSTACLE AVOIDANCE** (Ultrasonic + Servo) με **fail-safe** ώστε να μη “φεύγει στα τυφλά”.
