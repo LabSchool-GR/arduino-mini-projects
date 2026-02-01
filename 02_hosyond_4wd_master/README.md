@@ -5,6 +5,12 @@
 - **LINE TRACKING** (3 αισθητήρες γραμμής)
 - **OBSTACLE AVOIDANCE** (Ultrasonic + Servo) με **fail-safe** ώστε να μη “φεύγει στα τυφλά”.
 
+<p align="center">
+  <img src="Hosyond_4WD_Smart_Robot_Car_Kit.JPG" alt="Hosyond 4WD Robot"><br>
+  <em>Ολοκλήρωση της κατασκευής στον Σύλλογο Τεχνολογίας Θράκης</em>
+  <em>Ομάδα Κατασκευής: Κώστας Λ., Γιάννης Γ., Άρης Τ., Δημήτρης Κ. </em>
+</p>
+
 ---
 
 ## 1) Απαιτήσεις
