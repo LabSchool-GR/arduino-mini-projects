@@ -1,42 +1,90 @@
 /*
   ==========================================================
   Hosyond 4WD Smart Robot Car Kit
-  MASTER v2.5 — Teacher Edition (Compact + Safe)
+  MASTER v2.6 — Teacher Edition (Compact + Safe)
   ==========================================================
 
   Author: Δημήτρης Κανατάς
   For: Σύλλογος Τεχνολογίας Θράκης
-  License: MIT (προτείνεται για εκπαιδευτική χρήση)
-  
+  License: MIT (εκπαιδευτική χρήση)
+
   ----------------------------------------------------------
-  Εκπαιδευτικό sketch “όλα-σε-ένα” για 4WD car με:
-  1) MANUAL (IR + Bluetooth + Serial)
-  2) LINE TRACKING (3 sensors)
+  Στόχος (για μάθημα / εργαστήριο):
+  Ένα “όλα-σε-ένα” sketch για 4WD robot car με 3 βασικές λειτουργίες:
+
+  0) STOP
+  1) MANUAL (IR + Bluetooth Hosyond App + Serial)
+  2) LINE TRACKING (3 αισθητήρες γραμμής)
   3) OBSTACLE AVOIDANCE (Ultrasonic + Servo) με FAIL-SAFE
 
-  - State Machine για τα modes (STOP / MANUAL / LINE / AVOID)
-  - Χωρίς delay() στην κίνηση (μόνο delayMicroseconds για sonar trigger)
-  - Κοινό σύστημα εντολών: ίδιοι χαρακτήρες για Serial και Bluetooth
   ----------------------------------------------------------
-  
-  SERIAL / BLUETOOTH COMMANDS (9600 baud)
-    S = STOP
+  Εκπαιδευτική ιδέα:
+  - State Machine: η μεταβλητή currentMode δείχνει “σε ποια λειτουργία είμαστε”.
+  - Non-blocking λογική: ΔΕΝ χρησιμοποιούμε while() που “κλειδώνουν” τον κώδικα.
+    Έτσι το ρομπότ ακούει συνεχώς εντολές (IR/BT/Serial) και αλλάζει mode άμεσα.
+  - Fail-safe: αν το sonar δίνει άκυρες μετρήσεις πολλές φορές συνεχόμενα,
+    σταματάμε για να μη φύγει “στα τυφλά”.
+
+  ----------------------------------------------------------
+  Bluetooth / Serial (9600 baud) — συμβατό με Hosyond App:
+
+  Κίνηση (MANUAL):
+    U = forward
+    D = backward
+    L = left
+    R = right
+    S = STOP (ασφαλές: σταματά και γυρίζει σε STOP mode)
+
+  Modes:
     M = MANUAL
     T = LINE
     O = AVOID
-    U/D/L/R/X (μόνο στο MANUAL)
-    H = Help
 
-  IR (NEC cmd bytes) — βάσει δοκιμών/χειριστηρίου
+  Buttons της Hosyond App:
+    Line Tracking -> στέλνει 'T'
+    Ultrasonic Obstacle Avoidance -> στέλνει 'O'
+    IR Control -> συνήθως 'I' (εδώ το θεωρούμε MANUAL)
+    Gravity Sensor -> 'G' (ΔΕΝ το υποστηρίζουμε για ασφάλεια -> STOP)
+
+  Help:
+    H = εμφανίζει οδηγίες (Serial)
+
+  ----------------------------------------------------------
+  IR (NEC cmd bytes) σύμφωνα με το remote:
     Κίνηση:  UP=0x18, DOWN=0x4A, LEFT=0x10, RIGHT=0x5A, OK=0x38
     Modes:   1=0xA2(MANUAL), 2=0x62(LINE), 3=0xE2(AVOID), 0=0x98(STOP)
     Speed:   *=0x68(speed-), #=0xB0(speed+)
     TRIM:    4=0x22(trim-), 5=0x02(reset), 6=0xC2(trim+)
 
-  ΣΗΜΑΝΤΙΚΟ (Hardware)
-  - Στο upload βγάλε προσωρινά το Bluetooth module.
-  - BT RX θέλει διαιρέτη τάσης (Arduino TX 5V -> BT RX ~3.3V).
-  - Servo: ιδανικά ξεχωριστή 5V τροφοδοσία με κοινή GND.
+  ----------------------------------------------------------
+  PINOUT (όπως το project)
+  L298N:
+    LB=D2  LF=D4  RB=D7  RF=D8
+    LPWM=D5 RPWM=D6
+
+  Line Sensors (INPUT_PULLUP):
+    L=D9  M=D10  R=D11
+    Αν “διαβάζουν ανάποδα” -> LINE_ACTIVE_LOW = 1
+
+  Ultrasonic:
+    TRIG = A0
+    ECHO = A1
+    (Αν τα έχεις ανάποδα, θα βλέπεις 999cm και θα ενεργοποιεί FAIL-SAFE.)
+
+  Servo:
+    SERVO = D3
+
+  IR Receiver:
+    IR = D12
+
+  Bluetooth (HC-05/HC-06):
+    BT RX (Arduino) = A2 (Arduino RX <- BT TX)
+    BT TX (Arduino) = A3 (Arduino TX -> BT RX με διαιρέτη τάσης!)
+
+  ----------------------------------------------------------
+  Σταθερή λειτουργία (πολύ σημαντικό):
+  - Servo καλύτερα με ξεχωριστά 5V (step-down/power bank) + κοινή GND.
+  - Στο upload βγάζουμε προσωρινά το BT.
 */
 
 #include <Arduino.h>
@@ -53,11 +101,10 @@
 #define USE_SERVO      1
 #define USE_ULTRASONIC 1
 
-// Αν οι αισθητήρες γραμμής δίνουν 0 πάνω στη γραμμή και 1 εκτός (ή το αντίστροφο),
-// εδώ το “γυρίζεις” χωρίς να αλλάξεις καλώδια.
+// Αν οι αισθητήρες γραμμής “διαβάζουν ανάποδα”, γύρνα το σε 1.
 #define LINE_ACTIVE_LOW 0
 
-// Εκπαιδευτικό logging στο Serial (βάλε 0 αν θες τελείως “σιωπηλό”).
+// Εκπαιδευτικό logging στο Serial (0 = “σιωπηλό”)
 #define VERBOSE 1
 
 #if VERBOSE
@@ -69,7 +116,7 @@
 #endif
 
 // =======================================================
-// 2) PINS (όπως επιβεβαιώθηκαν στα tests)
+// 2) PINS
 // =======================================================
 
 // L298N
@@ -85,17 +132,19 @@ const uint8_t PIN_LINE_L = 9;
 const uint8_t PIN_LINE_M = 10;
 const uint8_t PIN_LINE_R = 11;
 
-// Ultrasonic (TRIG/ECHO) + Servo
+// Ultrasonic
 const uint8_t PIN_TRIG  = A0;
 const uint8_t PIN_ECHO  = A1;
+
+// Servo
 const uint8_t PIN_SERVO = 3;
 
 // IR receiver
 const uint8_t PIN_IR_RECV = 12;
 
-// Bluetooth (HC-05/HC-06) σε A2/A3 (digital 16/17)
-const uint8_t PIN_BT_RX = A2; // Arduino RX <- BT TX
-const uint8_t PIN_BT_TX = A3; // Arduino TX -> BT RX (με διαιρέτη τάσης)
+// Bluetooth
+const uint8_t PIN_BT_RX = A2;   // Arduino RX <- BT TX
+const uint8_t PIN_BT_TX = A3;   // Arduino TX -> BT RX (με διαιρέτη τάσης)
 
 // =======================================================
 // 3) IR COMMANDS (NEC cmd bytes)
@@ -132,7 +181,7 @@ Mode currentMode = Mode::STOP;
 AvoidState avoidState = AvoidState::IDLE;
 
 // =======================================================
-// 5) TUNING (τα πλήκτρα της συμπεριφοράς)
+// 5) TUNING (οι “ρυθμίσεις συμπεριφοράς”)
 // =======================================================
 
 // Ταχύτητες
@@ -140,25 +189,25 @@ const uint8_t SPEED_DEFAULT = 160;
 const uint8_t SPEED_TURN    = 150;
 const uint8_t SPEED_SLOW    = 120;
 
-// Line correction strength (πόσο με ένταση διορθώνει αριστερά/δεξιά)
+// LINE: πόσο “δυνατά” διορθώνει
 const uint8_t LINE_K = 60;
 
-// Obstacle threshold (cm): κάτω από αυτό θεωρούμε “κοντά εμπόδιο”
+// AVOID: κάτω από αυτό θεωρούμε εμπόδιο κοντά
 const uint16_t OBSTACLE_NEAR_CM = 22;
 
-// Manual speed (ρυθμιζόμενο από IR */#)
+// MANUAL speed (ρυθμιζόμενο από IR */#)
 uint8_t speedManual = SPEED_DEFAULT;
 const uint8_t SPEED_STEP = 15;
 const uint8_t SPEED_MIN  = 80;
 const uint8_t SPEED_MAX  = 255;
 
-// TRIM ευθείας (live από IR 4/6) — μικρή διόρθωση λόγω μηχανικών ανοχών
+// TRIM ευθείας (για LINE) — μικρή διόρθωση λόγω μηχανικών ανοχών
 int8_t trimStraight = 0;
 const int8_t TRIM_STEP = 2;
 const int8_t TRIM_MIN  = -40;
 const int8_t TRIM_MAX  =  40;
 
-// Servo angles
+// Servo angles (AVOID)
 #if USE_SERVO
 Servo headServo;
 #endif
@@ -167,7 +216,7 @@ const uint8_t SERVO_LEFT   = 150;
 const uint8_t SERVO_RIGHT  = 30;
 
 // =======================================================
-// 6) TIMERS (χωρίς delay)
+// 6) TIMERS (χωρίς delay στα modes)
 // =======================================================
 
 const unsigned long LINE_INTERVAL_MS       = 20;
@@ -175,10 +224,10 @@ const unsigned long SONAR_INTERVAL_MS      = 60;
 const unsigned long AVOID_STEP_INTERVAL_MS = 40;
 const unsigned long MANUAL_TIMEOUT_MS      = 1200;
 
-// Αποφυγή “runaway” αν sonar δεν βλέπει (timeouts)
+// sonar fail-safe
 const uint16_t SONAR_INVALID_CM = 400;     // >=400 θεωρείται άκυρο (π.χ. 999)
 const uint8_t  SONAR_INVALID_LIMIT = 8;    // πόσες άκυρες συνεχόμενες
-const unsigned long AVOID_RETRY_MS = 600;  // pause και ξαναδοκιμή
+const unsigned long AVOID_RETRY_MS = 600;  // pause και retry
 
 // =======================================================
 // 7) GLOBALS (runtime)
@@ -204,18 +253,18 @@ uint16_t distLeft = 999, distRight = 999;
 uint8_t lastIrCmd = 0;
 
 // =======================================================
-// 8) ΒΟΗΘΗΤΙΚΑ (logs / help)
+// 8) ΒΟΗΘΗΤΙΚΑ (help / logs)
 // =======================================================
 
 static inline void printHelp() {
 #if VERBOSE
-  Serial.println(F("\n=== HOSYOND MASTER v2.5 HELP ==="));
-  Serial.println(F("Serial/BT: S=STOP, M=MANUAL, T=LINE, O=AVOID"));
-  Serial.println(F("Manual (MANUAL): U/D/L/R/X"));
+  Serial.println(F("\n=== HOSYOND MASTER v2.6 (NO FOLLOW) HELP ==="));
+  Serial.println(F("Modes: S=STOP, M=MANUAL, T=LINE, O=AVOID"));
+  Serial.println(F("Manual moves (MANUAL): U/D/L/R/S (Hosyond App compatible)"));
   Serial.println(F("Help: H"));
   Serial.println(F("IR: 1=MANUAL, 2=LINE, 3=AVOID, 0=STOP, OK=STOP"));
   Serial.println(F("IR: *=speed-, #=speed+ | 4=trim-, 6=trim+, 5=trim reset"));
-  Serial.println(F("================================\n"));
+  Serial.println(F("===========================================\n"));
 #endif
 }
 
@@ -242,13 +291,6 @@ static inline void logAvoid(AvoidState s) {
 #endif
 }
 
-static inline void logManual(const __FlashStringHelper* msg) {
-#if VERBOSE
-  LOG(F("[MANUAL] "));
-  LOGLN(msg);
-#endif
-}
-
 static inline void logTrimSpeed() {
 #if VERBOSE
   Serial.print(F("[SPEED] manual=")); Serial.println(speedManual);
@@ -261,26 +303,26 @@ static inline void logTrimSpeed() {
 // =======================================================
 
 static inline void setMotorRaw(int8_t leftDir, int8_t rightDir, uint8_t leftPWM, uint8_t rightPWM) {
-  // left
+  // left direction
   if (leftDir > 0)      { digitalWrite(PIN_LF, HIGH); digitalWrite(PIN_LB, LOW); }
   else if (leftDir < 0) { digitalWrite(PIN_LF, LOW);  digitalWrite(PIN_LB, HIGH); }
-  else                  { digitalWrite(PIN_LF, LOW);  digitalWrite(PIN_LB, LOW); }
+  else                  { digitalWrite(PIN_LF, LOW);  digitalWrite(PIN_LB, LOW);  }
 
-  // right
+  // right direction
   if (rightDir > 0)      { digitalWrite(PIN_RF, HIGH); digitalWrite(PIN_RB, LOW); }
   else if (rightDir < 0) { digitalWrite(PIN_RF, LOW);  digitalWrite(PIN_RB, HIGH); }
-  else                   { digitalWrite(PIN_RF, LOW);  digitalWrite(PIN_RB, LOW); }
+  else                   { digitalWrite(PIN_RF, LOW);  digitalWrite(PIN_RB, LOW);  }
 
   analogWrite(PIN_LPWM, leftPWM);
   analogWrite(PIN_RPWM, rightPWM);
 }
 
-static inline void stopMotors()                  { setMotorRaw(0, 0, 0, 0); }
-static inline void forward(uint8_t sp)           { setMotorRaw(+1, +1, sp, sp); }
-static inline void backward(uint8_t sp)          { setMotorRaw(-1, -1, sp, sp); }
-static inline void turnLeft(uint8_t sp)          { setMotorRaw(-1, +1, sp, sp); }
-static inline void turnRight(uint8_t sp)         { setMotorRaw(+1, -1, sp, sp); }
-static inline void forwardLR(uint8_t L, uint8_t R){ setMotorRaw(+1, +1, L, R); }
+static inline void stopMotors()                     { setMotorRaw(0, 0, 0, 0); }
+static inline void forward(uint8_t sp)              { setMotorRaw(+1, +1, sp, sp); }
+static inline void backward(uint8_t sp)             { setMotorRaw(-1, -1, sp, sp); }
+static inline void turnLeft(uint8_t sp)             { setMotorRaw(-1, +1, sp, sp); }
+static inline void turnRight(uint8_t sp)            { setMotorRaw(+1, -1, sp, sp); }
+static inline void forwardLR(uint8_t L, uint8_t R)  { setMotorRaw(+1, +1, L, R); }
 
 // TRIM ευθείας: L = base+trim, R = base-trim
 static inline void forwardTrim(uint8_t base) {
@@ -295,16 +337,21 @@ static inline void forwardTrim(uint8_t base) {
 
 static inline void enterMode(Mode m) {
   currentMode = m;
+
+  // Πρώτα ασφάλεια: σταματάμε πάντα
   stopMotors();
 
 #if USE_SERVO
   headServo.write(SERVO_CENTER);
 #endif
 
-  // reset mode-specific timing/flags
+  // Reset timers/flags που σχετίζονται με το mode
   unsigned long now = millis();
+
   if (m == Mode::MANUAL) tManualLastCmd = now;
+
   if (m == Mode::LINE)   tLine = now;
+
   if (m == Mode::AVOID) {
     avoidState = AvoidState::IDLE;
     tAvoid = now;
@@ -318,36 +365,78 @@ static inline void enterMode(Mode m) {
 }
 
 // =======================================================
-// 11) INPUT: Serial / Bluetooth
+// 11) INPUT: Serial / Bluetooth (Hosyond compatible)
 // =======================================================
 
 static inline void applyCommandChar(char c) {
+  // αγνόησε CR/LF/space
+  if (c == '\r' || c == '\n' || c == ' ') return;
+
+  // κεφαλαία
   if (c >= 'a' && c <= 'z') c = (char)(c - 'a' + 'A');
 
+#if VERBOSE
+  Serial.print(F("[CMD] "));
+  Serial.println(c);
+#endif
+
   switch (c) {
-    // modes
-    case 'S': enterMode(Mode::STOP);   break;
+
+    // -------------------------
+    // Modes / Safety
+    // -------------------------
+
+    // Hosyond STOP: εδώ το κάνουμε “STOP mode” (ασφαλές και προβλέψιμο)
+    case 'S':
+      enterMode(Mode::STOP);
+      break;
+
     case 'M': enterMode(Mode::MANUAL); break;
     case 'T': enterMode(Mode::LINE);   break;
     case 'O': enterMode(Mode::AVOID);  break;
 
-    // manual moves
-    case 'U':
-      if (currentMode == Mode::MANUAL) { forward(speedManual); tManualLastCmd = millis(); logManual(F("FORWARD")); }
-      break;
-    case 'D':
-      if (currentMode == Mode::MANUAL) { backward(speedManual); tManualLastCmd = millis(); logManual(F("BACKWARD")); }
-      break;
-    case 'L':
-      if (currentMode == Mode::MANUAL) { turnLeft(SPEED_TURN); tManualLastCmd = millis(); logManual(F("LEFT")); }
-      break;
-    case 'R':
-      if (currentMode == Mode::MANUAL) { turnRight(SPEED_TURN); tManualLastCmd = millis(); logManual(F("RIGHT")); }
-      break;
-    case 'X':
-      if (currentMode == Mode::MANUAL) { stopMotors(); tManualLastCmd = millis(); logManual(F("STOP")); }
+    // Hosyond: IR Control button
+    case 'I':
+      enterMode(Mode::MANUAL);
       break;
 
+    // Hosyond: Gravity Sensor (στέλνει stream/άλλη λογική)
+    // Teacher-safe: δεν το υποστηρίζουμε -> STOP
+    case 'G':
+      enterMode(Mode::STOP);
+#if VERBOSE
+      LOGLN(F("[INFO] Gravity mode not supported -> STOP"));
+#endif
+      break;
+
+    // -------------------------
+    // Manual moves (Hosyond app joystick)
+    // -------------------------
+    case 'U':
+      if (currentMode != Mode::MANUAL) enterMode(Mode::MANUAL);
+      forward(speedManual);
+      tManualLastCmd = millis();
+      break;
+
+    case 'D':
+      if (currentMode != Mode::MANUAL) enterMode(Mode::MANUAL);
+      backward(speedManual);
+      tManualLastCmd = millis();
+      break;
+
+    case 'L':
+      if (currentMode != Mode::MANUAL) enterMode(Mode::MANUAL);
+      turnLeft(SPEED_TURN);
+      tManualLastCmd = millis();
+      break;
+
+    case 'R':
+      if (currentMode != Mode::MANUAL) enterMode(Mode::MANUAL);
+      turnRight(SPEED_TURN);
+      tManualLastCmd = millis();
+      break;
+
+    // legacy help
     case 'H':
       printHelp();
       break;
@@ -394,7 +483,7 @@ static inline void goManualIfNeeded() {
 static inline void applyIrCmd(uint8_t cmd) {
   lastIrCmd = cmd;
 
-  // modes (μία φορά)
+  // modes
   if (cmd == IR_1) { enterMode(Mode::MANUAL); return; }
   if (cmd == IR_2) { enterMode(Mode::LINE);   return; }
   if (cmd == IR_3) { enterMode(Mode::AVOID);  return; }
@@ -411,10 +500,10 @@ static inline void applyIrCmd(uint8_t cmd) {
   if (cmd == IR_5) { trimStraight = 0; logTrimSpeed(); return; }
 
   // motion (repeatable)
-  if (cmd == IR_UP)    { goManualIfNeeded(); forward(speedManual);  tManualLastCmd = millis(); logManual(F("FORWARD (IR)")); return; }
-  if (cmd == IR_DOWN)  { goManualIfNeeded(); backward(speedManual); tManualLastCmd = millis(); logManual(F("BACKWARD (IR)")); return; }
-  if (cmd == IR_LEFT)  { goManualIfNeeded(); turnLeft(SPEED_TURN);  tManualLastCmd = millis(); logManual(F("LEFT (IR)")); return; }
-  if (cmd == IR_RIGHT) { goManualIfNeeded(); turnRight(SPEED_TURN); tManualLastCmd = millis(); logManual(F("RIGHT (IR)")); return; }
+  if (cmd == IR_UP)    { goManualIfNeeded(); forward(speedManual);  tManualLastCmd = millis(); return; }
+  if (cmd == IR_DOWN)  { goManualIfNeeded(); backward(speedManual); tManualLastCmd = millis(); return; }
+  if (cmd == IR_LEFT)  { goManualIfNeeded(); turnLeft(SPEED_TURN);  tManualLastCmd = millis(); return; }
+  if (cmd == IR_RIGHT) { goManualIfNeeded(); turnRight(SPEED_TURN); tManualLastCmd = millis(); return; }
 }
 
 static inline void updateIR() {
@@ -470,7 +559,7 @@ static inline void updateLine(unsigned long now) {
   // 1) Μόνο ο μεσαίος -> ευθεία (με TRIM)
   if (M && !L && !R) { forwardTrim(SPEED_DEFAULT); return; }
 
-  // 2) Δεξί βλέπει γραμμή -> διόρθωση προς δεξιά
+  // 2) Δεξί βλέπει γραμμή -> διόρθωση
   if (R && !L) {
     uint8_t leftPWM  = (uint8_t)constrain((int)SPEED_DEFAULT + (int)LINE_K, 0, 255);
     uint8_t rightPWM = (uint8_t)constrain((int)SPEED_DEFAULT - (int)LINE_K, 0, 255);
@@ -478,7 +567,7 @@ static inline void updateLine(unsigned long now) {
     return;
   }
 
-  // 3) Αριστερό βλέπει γραμμή -> διόρθωση προς αριστερά
+  // 3) Αριστερό βλέπει γραμμή -> διόρθωση
   if (L && !R) {
     uint8_t leftPWM  = (uint8_t)constrain((int)SPEED_DEFAULT - (int)LINE_K, 0, 255);
     uint8_t rightPWM = (uint8_t)constrain((int)SPEED_DEFAULT + (int)LINE_K, 0, 255);
@@ -486,10 +575,10 @@ static inline void updateLine(unsigned long now) {
     return;
   }
 
-  // 4) Κανένας δεν βλέπει -> stop motors (μένουμε σε LINE mode)
+  // 4) Κανένας δεν βλέπει -> stop motors
   if (!L && !M && !R) { stopMotors(); return; }
 
-  // 5) Άλλος συνδυασμός -> αργή ευθεία (με TRIM)
+  // 5) Άλλοι συνδυασμοί -> αργή ευθεία (πιο “ήπια”)
   forwardTrim(SPEED_SLOW);
 }
 
@@ -503,6 +592,7 @@ static inline uint16_t readUltrasonicCm() {
   digitalWrite(PIN_TRIG, HIGH); delayMicroseconds(10);
   digitalWrite(PIN_TRIG, LOW);
 
+  // timeout ~25ms => ~4m
   unsigned long d = pulseIn(PIN_ECHO, HIGH, 25000UL);
   if (d == 0) return 999;
   return (uint16_t)(d / 58UL);
@@ -593,6 +683,7 @@ static inline void updateAvoid(unsigned long now) {
       break;
 
     case AvoidState::TURN:
+      // στρίβουμε προς την πλευρά που “έχει περισσότερο χώρο”
       if (distLeft >= distRight) turnLeft(SPEED_TURN);
       else turnRight(SPEED_TURN);
 
@@ -660,7 +751,7 @@ void setup() {
   enterMode(Mode::STOP);
 
 #if VERBOSE
-  LOGLN(F("HOSYOND MASTER v2.5 READY"));
+  LOGLN(F("HOSYOND MASTER v2.6 READY (NO FOLLOW)"));
   printHelp();
   logTrimSpeed();
 #endif
@@ -669,19 +760,21 @@ void setup() {
 void loop() {
   unsigned long now = millis();
 
-  // Inputs
+  // Inputs (πάντα πρώτα, για να “ακούει” αμέσως)
   updateSerial();
 #if USE_BLUETOOTH
   updateBluetooth();
 #endif
   updateIR();
 
-  // Manual safety: αν δεν έρθει εντολή, σταματάμε τα μοτέρ (αποφυγή runaway)
+  // MANUAL safety: αν σταματήσουν οι εντολές, κόβουμε τα μοτέρ.
+  // (π.χ. χάθηκε Bluetooth / έπεσε το τηλέφωνο / έφυγε εκτός εμβέλειας)
   if (currentMode == Mode::MANUAL && (now - tManualLastCmd > MANUAL_TIMEOUT_MS)) {
     stopMotors();
   }
 
-  // Active mode
+  // Active mode logic
   if (currentMode == Mode::LINE)  updateLine(now);
   if (currentMode == Mode::AVOID) updateAvoid(now);
+  // STOP και MANUAL δεν έχουν “αυτόνομο loop” εδώ (MANUAL κινείται μόνο με εντολές)
 }
