@@ -1,49 +1,83 @@
 # 02 - Hosyond 4WD Smart Robot Car Kit — MASTER v2.6
 
-Ένα ολοκληρωμένο εκπαιδευτικό project για Arduino 4WD robot car, σχεδιασμένο για εργαστήριο ρομποτικής και μαθήματα τεχνολογίας.
+Εκπαιδευτικό “όλα-σε-ένα” sketch για 4WD Arduino car με ασφαλή state-machine λογική και 3 modes:
 
-Η έκδοση **v2.6** περιλαμβάνει τρεις σταθερές και δοκιμασμένες λειτουργίες:
-
-- **MANUAL** (IR Remote + Bluetooth + Serial)
-- **LINE TRACKING** (3 αισθητήρες γραμμής με TRIM ευθυγράμμισης)
-- **OBSTACLE AVOIDANCE** (Ultrasonic + Servo) με ενσωματωμένο **fail-safe μηχανισμό ασφαλείας**
+- **MANUAL** (IR + Bluetooth + Serial)
+- **LINE TRACKING** (3 sensors)
+- **OBSTACLE AVOIDANCE** (Ultrasonic + Servo) με **fail-safe** και **Full Scan + Valley Detection**
 
 ---
 
-<p align="center">
-  <img src="Hosyond_4WD_Smart_Robot_Car_Kit.JPG" alt="Hosyond 4WD Robot"><br>
-  <em>Ολοκλήρωση της κατασκευής στον Σύλλογο Τεχνολογίας Θράκης</em><br>
-  <em>Ομάδα Κατασκευής: Κώστας Λ., Γιάννης Γ., Άρης Τ., Δημήτρης Κ.</em>
-</p>
+## 1) Τι νέο υπάρχει στη v2.6
+
+Η v2.6 κρατά τη σταθερή συμπεριφορά της Teacher Edition και προσθέτει ενισχυμένη πλοήγηση στην αποφυγή εμποδίων:
+
+- Νέες καταστάσεις στο `AvoidState`:
+  - `FULL_SCAN_START`
+  - `FULL_SCAN_IN_PROGRESS`
+  - `FULL_SCAN_EVALUATE`
+  - `FULL_SCAN_TURN_TO_VALLEY`
+  - `STRESS`
+- Σάρωση 180° με servo (`performFullScan()`)
+- Ανίχνευση “κοιλάδων”/διαδρόμων (`detectValleys()`)
+- Βαθμολόγηση κοιλάδων (`scoreValleys()`) με βάρη:
+  - πλάτος
+  - βάθος
+  - ποινή μεγάλης στροφής
+- Anti-stuck λογική:
+  - `consecutiveTurns`
+  - `oscillationCount`
+- Όταν δεν υπάρχει ασφαλές άνοιγμα, το ρομπότ μπαίνει σε `STRESS` και επιχειρεί escape + επανασάρωση.
 
 ---
 
-## 1) Παιδαγωγική φιλοσοφία
+## 2) Commands (Serial / Bluetooth, 9600)
 
-Το project έχει σχεδιαστεί με:
+### Modes
+- `S` = STOP
+- `M` = MANUAL
+- `T` = LINE
+- `O` = AVOID
 
-- Λογική **State Machine** (κάθε mode είναι ξεχωριστή κατάσταση λειτουργίας)
-- **Non-blocking προγραμματισμό** (δεν “παγώνει” ο κώδικας σε delay/while)
-- Ενσωματωμένους **μηχανισμούς ασφαλείας (fail-safe)**
-- Συμβατότητα με την επίσημη εφαρμογή Hosyond
+### Movement (MANUAL)
+- `U` = forward
+- `D` = backward
+- `L` = left
+- `R` = right
+- `X` = stop (μέσα στο MANUAL)
 
-Στόχος είναι η σταθερή, προβλέψιμη και ασφαλής λειτουργία μέσα σε σχολικό εργαστήριο.
-
----
-
-## 2) Απαιτήσεις Υλικού
-
-- Arduino UNO (ή συμβατό)
-- L298N Motor Driver
-- 3 αισθητήρες γραμμής (L/M/R)
-- Ultrasonic sensor (HC-SR04 ή παρόμοιο)
-- Servo (SG90)
-- IR receiver + IR remote
-- Bluetooth module HC-05 / HC-06
+### Extra
+- `H` = Help
+- `I` = MANUAL (Hosyond app IR Control button)
+- `G` = STOP (gravity mode not supported)
 
 ---
 
-## 3) Pinout (σύμφωνα με τον κώδικα v2.6)
+## 3) IR mapping (NEC command bytes)
+
+### Κίνηση
+- `UP=0x18`
+- `DOWN=0x4A`
+- `LEFT=0x10`
+- `RIGHT=0x5A`
+- `OK=0x38` (STOP)
+
+### Modes
+- `1=0xA2` → MANUAL
+- `2=0x62` → LINE
+- `3=0xE2` → AVOID
+- `0=0x98` → STOP
+
+### Ρυθμίσεις
+- `*=0x68` → speed-
+- `#=0xB0` → speed+
+- `4=0x22` → trim-
+- `5=0x02` → trim reset
+- `6=0xC2` → trim+
+
+---
+
+## 4) Pinout
 
 ### L298N
 - LB = D2
@@ -53,179 +87,47 @@
 - LPWM = D5
 - RPWM = D6
 
-### Line Sensors
-- L = D9  
-- M = D10  
-- R = D11  
+### Line sensors
+- L = D9
+- M = D10
+- R = D11
 
-Οι είσοδοι είναι `INPUT_PULLUP`.
+> Χρησιμοποιείται `INPUT_PULLUP`.
+> Αν η λογική είναι ανάποδη, άλλαξε `#define LINE_ACTIVE_LOW 0` σε `1`.
 
-Αν οι αισθητήρες διαβάζουν αντίστροφα, τροποποίησε στο sketch:
+### Ultrasonic + Servo
+- TRIG = A0
+- ECHO = A1
+- SERVO = D3
 
-## Ultrasonic
-
-- TRIG = A0  
-- ECHO = A1  
-
-Αν τα καλώδια είναι ανάποδα, το σύστημα θα βλέπει `999cm` και θα ενεργοποιεί τον μηχανισμό ασφαλείας.
-
----
-
-## Servo
-
-- SERVO = D3  
+### IR + Bluetooth
+- IR receiver = D12
+- BT RX (Arduino) = A2  (Arduino RX <- BT TX)
+- BT TX (Arduino) = A3  (Arduino TX -> BT RX, με διαιρέτη τάσης)
 
 ---
 
-## IR Receiver
+## 5) Ασφάλεια / Fail-safe
 
-- IR = D12  
-
----
-
-## Bluetooth (HC-05 / HC-06)
-
-- BT RX (Arduino) = A2  (Arduino RX ← BT TX)  
-- BT TX (Arduino) = A3  (Arduino TX → BT RX)  
-
-⚠ Το BT RX χρειάζεται διαιρέτη τάσης (5V → ~3.3V).
+- Αν το sonar δώσει επαναλαμβανόμενες άκυρες μετρήσεις, ενεργοποιείται fail-safe.
+- Το mode AVOID μπαίνει σε full scan αντί να συνεχίσει “στα τυφλά”.
+- Στο MANUAL, αν δεν έρθει εντολή για ~1.2s, τα μοτέρ σταματούν αυτόματα.
 
 ---
 
-# 4) Λειτουργίες (Modes)
+## 6) Τροφοδοσία & Upload tips
 
-## STOP
-
-Ασφαλής κατάσταση. Τα μοτέρ είναι απενεργοποιημένα.
-
-### Ενεργοποίηση:
-
-- IR: `0` ή `OK`  
-- Bluetooth / Serial: `S`  
+- Στο upload βγάζουμε προσωρινά το Bluetooth module.
+- BT RX χρειάζεται διαιρέτη τάσης (5V -> ~3.3V).
+- Servo: προτείνεται ξεχωριστή σταθερή 5V τροφοδοσία με **κοινή GND** με Arduino/L298N.
 
 ---
 
-## MANUAL (IR + Bluetooth + Serial)
+## 7) Έκδοση
 
-Το ρομπότ κινείται μόνο όταν λαμβάνει εντολή.
-
-### Bluetooth / Serial (9600 baud)
-
-### Modes:
-
-- `S` = STOP  
-- `M` = MANUAL  
-- `T` = LINE  
-- `O` = AVOID  
-
-### Κίνηση (μόνο σε MANUAL):
-
-- `U` = forward  
-- `D` = backward  
-- `L` = left  
-- `R` = right  
-
-Αν δεν ληφθεί εντολή για ~1.2 δευτερόλεπτα, τα μοτέρ σταματούν αυτόματα.
-
----
-
-## LINE TRACKING
-
-Χρησιμοποιεί τρεις αισθητήρες (L/M/R).
-
-### Λογική λειτουργίας:
-
-- Μόνο ο μεσαίος βλέπει γραμμή → ευθεία  
-- Δεξιός βλέπει γραμμή → διόρθωση δεξιά  
-- Αριστερός βλέπει γραμμή → διόρθωση αριστερά  
-- Κανένας δεν βλέπει γραμμή → STOP  
-
-### TRIM ευθείας
-
-Αν το ρομπότ τραβά ελαφρώς:
-
-- `4` = TRIM -  
-- `6` = TRIM +  
-- `5` = Reset TRIM  
-
----
-
-## OBSTACLE AVOIDANCE (με fail-safe)
-
-### Συμπεριφορά:
-
-1. Κίνηση μπροστά  
-2. Αν εντοπιστεί εμπόδιο:  
-   - STOP  
-   - Οπισθοχώρηση  
-   - Έλεγχος αριστερά  
-   - Έλεγχος δεξιά  
-   - Στροφή προς τη μεριά με περισσότερο χώρο  
-
-### Μηχανισμός ασφαλείας
-
-Αν ο ultrasonic δίνει συνεχόμενες άκυρες μετρήσεις:  
-→ Το ρομπότ σταματά και επιχειρεί επανεκκίνηση της διαδικασίας.
-
-Προστατεύει από:
-
-- Λανθασμένη καλωδίωση  
-- Πτώση τάσης  
-- Ασταθή τροφοδοσία  
-
----
-
-# 5) IR Remote Mapping
-
-### Movement:
-
-- UP / DOWN / LEFT / RIGHT  
-- OK = STOP  
-
-### Modes:
-
-- `1` = MANUAL  
-- `2` = LINE  
-- `3` = AVOID  
-- `0` = STOP  
-
-### Speed:
-
-- `*` = speed down  
-- `#` = speed up  
-
-### TRIM:
-
-- `4` = TRIM -  
-- `6` = TRIM +  
-- `5` = TRIM reset  
-
-Τα IR repeats επηρεάζουν μόνο την κίνηση.
-
----
-
-# 6) Οδηγίες Τροφοδοσίας
-
-- Ιδανικά ο servo να τροφοδοτείται από ξεχωριστή σταθερή πηγή 5V  
-- Όλα τα GND να είναι κοινά  
-- Τα περισσότερα προβλήματα προέρχονται από πτώση τάσης  
-
----
-
-# 7) Upload Tips
-
-- Κατά το upload, αφαιρέστε προσωρινά το Bluetooth module  
-- Μετά το upload, επανασυνδέστε το BT  
-
----
-
-# 8) Έκδοση
-
-Τρέχουσα έκδοση: **v2.6 (Teacher Edition)**  
-Σταθερή και δοκιμασμένη σε εργαστηριακό περιβάλλον.
-
----
+- Sketch: **MASTER v2.6 (Teacher Edition, NO FOLLOW)**
+- Έμφαση σε εκπαιδευτική καθαρότητα, ασφάλεια και επεκτασιμότητα.
 
 ## License
 
-MIT License — Εκπαιδευτική χρήση
+MIT

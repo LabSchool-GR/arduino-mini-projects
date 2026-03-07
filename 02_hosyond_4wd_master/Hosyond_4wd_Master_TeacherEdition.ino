@@ -1,90 +1,42 @@
 /*
   ==========================================================
   Hosyond 4WD Smart Robot Car Kit
-  MASTER v2.6 — Teacher Edition (Compact + Safe)
+  MASTER v2.5 — Teacher Edition (Compact + Safe)
   ==========================================================
 
   Author: Δημήτρης Κανατάς
   For: Σύλλογος Τεχνολογίας Θράκης
-  License: MIT (εκπαιδευτική χρήση)
-
+  License: MIT (προτείνεται για εκπαιδευτική χρήση)
+  
   ----------------------------------------------------------
-  Στόχος (για μάθημα / εργαστήριο):
-  Ένα “όλα-σε-ένα” sketch για 4WD robot car με 3 βασικές λειτουργίες:
-
-  0) STOP
-  1) MANUAL (IR + Bluetooth Hosyond App + Serial)
-  2) LINE TRACKING (3 αισθητήρες γραμμής)
+  Εκπαιδευτικό sketch “όλα-σε-ένα” για 4WD car με:
+  1) MANUAL (IR + Bluetooth + Serial)
+  2) LINE TRACKING (3 sensors)
   3) OBSTACLE AVOIDANCE (Ultrasonic + Servo) με FAIL-SAFE
 
+  - State Machine για τα modes (STOP / MANUAL / LINE / AVOID)
+  - Χωρίς delay() στην κίνηση (μόνο delayMicroseconds για sonar trigger)
+  - Κοινό σύστημα εντολών: ίδιοι χαρακτήρες για Serial και Bluetooth
   ----------------------------------------------------------
-  Εκπαιδευτική ιδέα:
-  - State Machine: η μεταβλητή currentMode δείχνει “σε ποια λειτουργία είμαστε”.
-  - Non-blocking λογική: ΔΕΝ χρησιμοποιούμε while() που “κλειδώνουν” τον κώδικα.
-    Έτσι το ρομπότ ακούει συνεχώς εντολές (IR/BT/Serial) και αλλάζει mode άμεσα.
-  - Fail-safe: αν το sonar δίνει άκυρες μετρήσεις πολλές φορές συνεχόμενα,
-    σταματάμε για να μη φύγει “στα τυφλά”.
-
-  ----------------------------------------------------------
-  Bluetooth / Serial (9600 baud) — συμβατό με Hosyond App:
-
-  Κίνηση (MANUAL):
-    U = forward
-    D = backward
-    L = left
-    R = right
-    S = STOP (ασφαλές: σταματά και γυρίζει σε STOP mode)
-
-  Modes:
+  
+  SERIAL / BLUETOOTH COMMANDS (9600 baud)
+    S = STOP
     M = MANUAL
     T = LINE
     O = AVOID
+    U/D/L/R/X (μόνο στο MANUAL)
+    H = Help
 
-  Buttons της Hosyond App:
-    Line Tracking -> στέλνει 'T'
-    Ultrasonic Obstacle Avoidance -> στέλνει 'O'
-    IR Control -> συνήθως 'I' (εδώ το θεωρούμε MANUAL)
-    Gravity Sensor -> 'G' (ΔΕΝ το υποστηρίζουμε για ασφάλεια -> STOP)
-
-  Help:
-    H = εμφανίζει οδηγίες (Serial)
-
-  ----------------------------------------------------------
-  IR (NEC cmd bytes) σύμφωνα με το remote:
+  IR (NEC cmd bytes) — βάσει δοκιμών/χειριστηρίου
     Κίνηση:  UP=0x18, DOWN=0x4A, LEFT=0x10, RIGHT=0x5A, OK=0x38
     Modes:   1=0xA2(MANUAL), 2=0x62(LINE), 3=0xE2(AVOID), 0=0x98(STOP)
     Speed:   *=0x68(speed-), #=0xB0(speed+)
     TRIM:    4=0x22(trim-), 5=0x02(reset), 6=0xC2(trim+)
 
-  ----------------------------------------------------------
-  PINOUT (όπως το project)
-  L298N:
-    LB=D2  LF=D4  RB=D7  RF=D8
-    LPWM=D5 RPWM=D6
-
-  Line Sensors (INPUT_PULLUP):
-    L=D9  M=D10  R=D11
-    Αν “διαβάζουν ανάποδα” -> LINE_ACTIVE_LOW = 1
-
-  Ultrasonic:
-    TRIG = A0
-    ECHO = A1
-    (Αν τα έχεις ανάποδα, θα βλέπεις 999cm και θα ενεργοποιεί FAIL-SAFE.)
-
-  Servo:
-    SERVO = D3
-
-  IR Receiver:
-    IR = D12
-
-  Bluetooth (HC-05/HC-06):
-    BT RX (Arduino) = A2 (Arduino RX <- BT TX)
-    BT TX (Arduino) = A3 (Arduino TX -> BT RX με διαιρέτη τάσης!)
-
-  ----------------------------------------------------------
-  Σταθερή λειτουργία (πολύ σημαντικό):
-  - Servo καλύτερα με ξεχωριστά 5V (step-down/power bank) + κοινή GND.
-  - Στο upload βγάζουμε προσωρινά το BT.
+  ΣΗΜΑΝΤΙΚΟ (Hardware)
+  - Στο upload βγάλε προσωρινά το Bluetooth module.
+  - BT RX θέλει διαιρέτη τάσης (Arduino TX 5V -> BT RX ~3.3V).
+  - Servo: ιδανικά ξεχωριστή 5V τροφοδοσία με κοινή GND.
 */
 
 #include <Arduino.h>
@@ -101,10 +53,11 @@
 #define USE_SERVO      1
 #define USE_ULTRASONIC 1
 
-// Αν οι αισθητήρες γραμμής “διαβάζουν ανάποδα”, γύρνα το σε 1.
+// Αν οι αισθητήρες γραμμής δίνουν 0 πάνω στη γραμμή και 1 εκτός (ή το αντίστροφο),
+// εδώ το “γυρίζεις” χωρίς να αλλάξεις καλώδια.
 #define LINE_ACTIVE_LOW 0
 
-// Εκπαιδευτικό logging στο Serial (0 = “σιωπηλό”)
+// Εκπαιδευτικό logging στο Serial (βάλε 0 αν θες τελείως “σιωπηλό”).
 #define VERBOSE 1
 
 #if VERBOSE
@@ -116,7 +69,7 @@
 #endif
 
 // =======================================================
-// 2) PINS
+// 2) PINS (όπως επιβεβαιώθηκαν στα tests)
 // =======================================================
 
 // L298N
@@ -132,19 +85,17 @@ const uint8_t PIN_LINE_L = 9;
 const uint8_t PIN_LINE_M = 10;
 const uint8_t PIN_LINE_R = 11;
 
-// Ultrasonic
+// Ultrasonic (TRIG/ECHO) + Servo
 const uint8_t PIN_TRIG  = A0;
 const uint8_t PIN_ECHO  = A1;
-
-// Servo
 const uint8_t PIN_SERVO = 3;
 
 // IR receiver
 const uint8_t PIN_IR_RECV = 12;
 
-// Bluetooth
-const uint8_t PIN_BT_RX = A2;   // Arduino RX <- BT TX
-const uint8_t PIN_BT_TX = A3;   // Arduino TX -> BT RX (με διαιρέτη τάσης)
+// Bluetooth (HC-05/HC-06) σε A2/A3 (digital 16/17)
+const uint8_t PIN_BT_RX = A2; // Arduino RX <- BT TX
+const uint8_t PIN_BT_TX = A3; // Arduino TX -> BT RX (με διαιρέτη τάσης)
 
 // =======================================================
 // 3) IR COMMANDS (NEC cmd bytes)
@@ -175,13 +126,21 @@ static const uint32_t IR_REPEAT = 0xFFFFFFFF;
 // =======================================================
 
 enum class Mode : uint8_t { STOP = 0, MANUAL, LINE, AVOID };
-enum class AvoidState : uint8_t { IDLE = 0, STOP, BACK, LOOK_L, LOOK_R, TURN, CENTER };
+enum class AvoidState : uint8_t {
+  IDLE = 0,        // Default: moving forward, checking obstacles
+  STOP, BACK, LOOK_L, LOOK_R, TURN, CENTER,  // Original reactive states
+  FULL_SCAN_START, // REV 2.1: initiate 180° scan
+  FULL_SCAN_IN_PROGRESS, // scanning arc
+  FULL_SCAN_EVALUATE, // analyze valleys
+  FULL_SCAN_TURN_TO_VALLEY, // turn toward best valley
+  STRESS // trapped / oscillating - needs escape
+};
 
 Mode currentMode = Mode::STOP;
 AvoidState avoidState = AvoidState::IDLE;
 
 // =======================================================
-// 5) TUNING (οι “ρυθμίσεις συμπεριφοράς”)
+// 5) TUNING (τα πλήκτρα της συμπεριφοράς)
 // =======================================================
 
 // Ταχύτητες
@@ -189,25 +148,25 @@ const uint8_t SPEED_DEFAULT = 160;
 const uint8_t SPEED_TURN    = 150;
 const uint8_t SPEED_SLOW    = 120;
 
-// LINE: πόσο “δυνατά” διορθώνει
+// Line correction strength (πόσο με ένταση διορθώνει αριστερά/δεξιά)
 const uint8_t LINE_K = 60;
 
-// AVOID: κάτω από αυτό θεωρούμε εμπόδιο κοντά
+// Obstacle threshold (cm): κάτω από αυτό θεωρούμε “κοντά εμπόδιο”
 const uint16_t OBSTACLE_NEAR_CM = 22;
 
-// MANUAL speed (ρυθμιζόμενο από IR */#)
+// Manual speed (ρυθμιζόμενο από IR */#)
 uint8_t speedManual = SPEED_DEFAULT;
 const uint8_t SPEED_STEP = 15;
 const uint8_t SPEED_MIN  = 80;
 const uint8_t SPEED_MAX  = 255;
 
-// TRIM ευθείας (για LINE) — μικρή διόρθωση λόγω μηχανικών ανοχών
+// TRIM ευθείας (live από IR 4/6) — μικρή διόρθωση λόγω μηχανικών ανοχών
 int8_t trimStraight = 0;
 const int8_t TRIM_STEP = 2;
 const int8_t TRIM_MIN  = -40;
 const int8_t TRIM_MAX  =  40;
 
-// Servo angles (AVOID)
+// Servo angles
 #if USE_SERVO
 Servo headServo;
 #endif
@@ -216,7 +175,41 @@ const uint8_t SERVO_LEFT   = 150;
 const uint8_t SERVO_RIGHT  = 30;
 
 // =======================================================
-// 6) TIMERS (χωρίς delay στα modes)
+// REV 2.1: Navigation Configuration (Tunable Parameters)
+// =======================================================
+struct NavConfig {
+  // Full scan 180° parameters (configurable)
+  uint8_t scanStartAngle     = 0;      // servo angle to start scan (left extreme)
+  uint8_t scanEndAngle       = 180;    // servo angle to end scan (right extreme)
+  uint8_t scanStepDeg        = 2;      // step size in degrees (smaller = finer scan)
+  uint8_t servoSettleMs      = 50;     // delay for servo to reach position
+
+  // Valley detection thresholds
+  uint16_t valleyDepthCm     = 40;     // minimum distance to consider (cm)
+  uint8_t minValleySamples   = 3;      // minimum consecutive measurements
+  uint16_t minValleyWidthCm  = 20;     // minimum valley width (robot width + margin)
+
+  // Valley scoring weights
+  uint8_t weightWidth        = 2;      // weight for valley width
+  uint8_t weightDepth        = 1;      // weight for valley depth
+  uint8_t weightTurn         = 3;      // weight for turn penalty (higher = prefer forward)
+  uint16_t minValleyScore    = 75;     // minimum score to consider valley valid (raised above 60)
+
+  // Anti-stuck mechanism triggers
+  uint8_t maxAvoidTurns      = 3;      // consecutive turns before full scan
+
+  // Turn timing (ms per degree)
+  uint8_t turnMsPerDeg       = 12;
+
+  // Caps and limits
+  uint16_t maxDistCm         = 300;    // cap distance readings at this value
+  uint16_t sonarMaxCm        = 400;    // consider invalid if >= this
+};
+
+NavConfig navConfig;
+
+// =======================================================
+// 6) TIMERS (χωρίς delay)
 // =======================================================
 
 const unsigned long LINE_INTERVAL_MS       = 20;
@@ -224,10 +217,10 @@ const unsigned long SONAR_INTERVAL_MS      = 60;
 const unsigned long AVOID_STEP_INTERVAL_MS = 40;
 const unsigned long MANUAL_TIMEOUT_MS      = 1200;
 
-// sonar fail-safe
-const uint16_t SONAR_INVALID_CM = 400;     // >=400 θεωρείται άκυρο (π.χ. 999)
-const uint8_t  SONAR_INVALID_LIMIT = 8;    // πόσες άκυρες συνεχόμενες
-const unsigned long AVOID_RETRY_MS = 600;  // pause και retry
+// Αποφυγή “runaway” αν sonar δεν βλέπει (timeouts)
+const uint16_t SONAR_INVALID_CM = 400;
+const uint8_t  SONAR_INVALID_LIMIT = 8;
+const unsigned long AVOID_RETRY_MS = 600;
 
 // =======================================================
 // 7) GLOBALS (runtime)
@@ -253,8 +246,176 @@ uint16_t distLeft = 999, distRight = 999;
 uint8_t lastIrCmd = 0;
 
 // =======================================================
-// 8) ΒΟΗΘΗΤΙΚΑ (help / logs)
+// REV 2.1: Full Scan & Valley Data
 // =======================================================
+
+#define MAX_SCAN_SAMPLES 91
+
+struct Valley {
+  uint8_t startIdx;
+  uint8_t endIdx;
+  uint16_t centerAngle;
+  uint16_t widthCm;
+  uint16_t depthCm;
+  uint16_t score;
+};
+
+uint16_t scanDistances[MAX_SCAN_SAMPLES];
+uint8_t scanSampleCount = 0;
+
+Valley validValleys[5];
+uint8_t validValleyCount = 0;
+Valley selectedValley;
+
+// Anti-stuck mechanism
+uint8_t consecutiveTurns = 0;
+bool lastTurnWasLeft = false;
+uint8_t oscillationCount = 0;
+
+static inline uint16_t readUltrasonicCm();
+
+// =======================================================
+// 8) ΒΟΗΘΗΤΙΚΑ (logs / help)
+// =======================================================
+
+// =======================================================
+// REV 2.1: SCANNING & VALLEY ANALYSIS FUNCTIONS
+// =======================================================
+
+static inline uint8_t calcScanSamples() {
+  return (uint8_t)((navConfig.scanEndAngle - navConfig.scanStartAngle) / navConfig.scanStepDeg) + 1;
+}
+
+static inline void performFullScan() {
+  scanSampleCount = calcScanSamples();
+  if (scanSampleCount > MAX_SCAN_SAMPLES) scanSampleCount = MAX_SCAN_SAMPLES;
+
+#if VERBOSE
+  Serial.print(F("[SCAN] Starting 180deg scan, "));
+  Serial.print(scanSampleCount);
+  Serial.println(F(" samples"));
+#endif
+
+  for (uint8_t i = 0; i < scanSampleCount; i++) {
+    uint16_t angle = navConfig.scanStartAngle + (uint16_t)i * navConfig.scanStepDeg;
+    if (angle > 180) angle = 180;
+
+#if USE_SERVO
+    headServo.write((uint8_t)angle);
+#endif
+
+    delay(navConfig.servoSettleMs);
+
+    uint16_t d = readUltrasonicCm();
+    if (d >= navConfig.sonarMaxCm) d = navConfig.maxDistCm;
+    else if (d > navConfig.maxDistCm) d = navConfig.maxDistCm;
+
+    scanDistances[i] = d;
+  }
+
+#if USE_SERVO
+  headServo.write(SERVO_CENTER);
+#endif
+
+#if VERBOSE
+  Serial.println(F("[SCAN] Completed"));
+#endif
+}
+
+static inline void detectValleys() {
+  validValleyCount = 0;
+  if (scanSampleCount < 3) return;
+
+  uint8_t i = 0;
+  while (i < scanSampleCount && validValleyCount < 5) {
+    if (scanDistances[i] < navConfig.valleyDepthCm) {
+      i++;
+      continue;
+    }
+
+    uint8_t valleyStart = i;
+    uint16_t sumDist = 0;
+    uint8_t count = 0;
+
+    while (i < scanSampleCount && scanDistances[i] >= navConfig.valleyDepthCm) {
+      sumDist += scanDistances[i];
+      count++;
+      i++;
+    }
+
+    uint8_t valleyEnd = i - 1;
+    if (count < navConfig.minValleySamples) continue;
+
+    uint16_t centerIdx = (valleyStart + valleyEnd) / 2;
+    uint16_t centerAngle = navConfig.scanStartAngle + centerIdx * navConfig.scanStepDeg;
+    uint16_t depthCm = sumDist / count;
+
+    uint16_t angleSpan = (valleyEnd - valleyStart) * navConfig.scanStepDeg;
+    uint16_t widthCm = depthCm;
+    if (angleSpan > 0) {
+      widthCm = (depthCm * angleSpan) / 60;
+    }
+
+    if (widthCm < navConfig.minValleyWidthCm) continue;
+
+    Valley &v = validValleys[validValleyCount];
+    v.startIdx = valleyStart;
+    v.endIdx = valleyEnd;
+    v.centerAngle = centerAngle;
+    v.widthCm = widthCm;
+    v.depthCm = depthCm;
+    v.score = 0;
+
+    validValleyCount++;
+  }
+
+#if VERBOSE
+  Serial.print(F("[VALLEYS] Found "));
+  Serial.print(validValleyCount);
+  Serial.println(F(" valid valleys"));
+#endif
+}
+
+static inline void scoreValleys() {
+  for (uint8_t i = 0; i < validValleyCount; i++) {
+    Valley &v = validValleys[i];
+
+    uint16_t widthScore = v.widthCm * navConfig.weightWidth;
+    uint16_t depthScore = v.depthCm * navConfig.weightDepth;
+
+    uint16_t forwardDir = 90;
+    int16_t angleDiff = (int16_t)v.centerAngle - (int16_t)forwardDir;
+    if (angleDiff < 0) angleDiff = -angleDiff;
+    uint16_t turnPenalty = (angleDiff * navConfig.weightTurn) / 10;
+
+    v.score = (widthScore + depthScore) > turnPenalty ?
+              (widthScore + depthScore) - turnPenalty : 1;
+  }
+
+  uint16_t bestScore = 0;
+  uint8_t bestIdx = 0;
+  for (uint8_t i = 0; i < validValleyCount; i++) {
+    if (validValleys[i].score > bestScore) {
+      bestScore = validValleys[i].score;
+      bestIdx = i;
+    }
+  }
+
+  if (bestScore >= navConfig.minValleyScore && validValleyCount > 0) {
+    selectedValley = validValleys[bestIdx];
+#if VERBOSE
+    Serial.print(F("[VALLEY] Best: angle="));
+    Serial.print(selectedValley.centerAngle);
+    Serial.print(F(" score="));
+    Serial.println(selectedValley.score);
+#endif
+  } else {
+#if VERBOSE
+    LOGLN(F("[VALLEY] No valid valley found"));
+#endif
+    validValleyCount = 0;
+  }
+}
 
 static inline void printHelp() {
 #if VERBOSE
@@ -288,6 +449,11 @@ static inline void logAvoid(AvoidState s) {
   if (s == AvoidState::LOOK_R) LOGLN(F("LOOK RIGHT"));
   if (s == AvoidState::TURN)   LOGLN(F("TURN"));
   if (s == AvoidState::CENTER) LOGLN(F("CENTER"));
+  if (s == AvoidState::FULL_SCAN_START) LOGLN(F("FULL_SCAN_START"));
+  if (s == AvoidState::FULL_SCAN_IN_PROGRESS) LOGLN(F("FULL_SCAN_IN_PROGRESS"));
+  if (s == AvoidState::FULL_SCAN_EVALUATE) LOGLN(F("FULL_SCAN_EVALUATE"));
+  if (s == AvoidState::FULL_SCAN_TURN_TO_VALLEY) LOGLN(F("FULL_SCAN_TURN_TO_VALLEY"));
+  if (s == AvoidState::STRESS) LOGLN(F("STRESS"));
 #endif
 }
 
@@ -303,28 +469,25 @@ static inline void logTrimSpeed() {
 // =======================================================
 
 static inline void setMotorRaw(int8_t leftDir, int8_t rightDir, uint8_t leftPWM, uint8_t rightPWM) {
-  // left direction
   if (leftDir > 0)      { digitalWrite(PIN_LF, HIGH); digitalWrite(PIN_LB, LOW); }
   else if (leftDir < 0) { digitalWrite(PIN_LF, LOW);  digitalWrite(PIN_LB, HIGH); }
-  else                  { digitalWrite(PIN_LF, LOW);  digitalWrite(PIN_LB, LOW);  }
+  else                  { digitalWrite(PIN_LF, LOW);  digitalWrite(PIN_LB, LOW); }
 
-  // right direction
   if (rightDir > 0)      { digitalWrite(PIN_RF, HIGH); digitalWrite(PIN_RB, LOW); }
   else if (rightDir < 0) { digitalWrite(PIN_RF, LOW);  digitalWrite(PIN_RB, HIGH); }
-  else                   { digitalWrite(PIN_RF, LOW);  digitalWrite(PIN_RB, LOW);  }
+  else                   { digitalWrite(PIN_RF, LOW);  digitalWrite(PIN_RB, LOW); }
 
   analogWrite(PIN_LPWM, leftPWM);
   analogWrite(PIN_RPWM, rightPWM);
 }
 
-static inline void stopMotors()                     { setMotorRaw(0, 0, 0, 0); }
-static inline void forward(uint8_t sp)              { setMotorRaw(+1, +1, sp, sp); }
-static inline void backward(uint8_t sp)             { setMotorRaw(-1, -1, sp, sp); }
-static inline void turnLeft(uint8_t sp)             { setMotorRaw(-1, +1, sp, sp); }
-static inline void turnRight(uint8_t sp)            { setMotorRaw(+1, -1, sp, sp); }
-static inline void forwardLR(uint8_t L, uint8_t R)  { setMotorRaw(+1, +1, L, R); }
+static inline void stopMotors()                   { setMotorRaw(0, 0, 0, 0); }
+static inline void forward(uint8_t sp)            { setMotorRaw(+1, +1, sp, sp); }
+static inline void backward(uint8_t sp)           { setMotorRaw(-1, -1, sp, sp); }
+static inline void turnLeft(uint8_t sp)           { setMotorRaw(-1, +1, sp, sp); }
+static inline void turnRight(uint8_t sp)          { setMotorRaw(+1, -1, sp, sp); }
+static inline void forwardLR(uint8_t L, uint8_t R){ setMotorRaw(+1, +1, L, R); }
 
-// TRIM ευθείας: L = base+trim, R = base-trim
 static inline void forwardTrim(uint8_t base) {
   int L = constrain((int)base + (int)trimStraight, 0, 255);
   int R = constrain((int)base - (int)trimStraight, 0, 255);
@@ -337,27 +500,32 @@ static inline void forwardTrim(uint8_t base) {
 
 static inline void enterMode(Mode m) {
   currentMode = m;
-
-  // Πρώτα ασφάλεια: σταματάμε πάντα
   stopMotors();
 
 #if USE_SERVO
   headServo.write(SERVO_CENTER);
 #endif
 
-  // Reset timers/flags που σχετίζονται με το mode
   unsigned long now = millis();
-
   if (m == Mode::MANUAL) tManualLastCmd = now;
-
   if (m == Mode::LINE)   tLine = now;
-
   if (m == Mode::AVOID) {
-    avoidState = AvoidState::IDLE;
+    Serial.println("---->Mode 3 Enabled");
+    avoidState = AvoidState::FULL_SCAN_START;
     tAvoid = now;
     sonarInvalidCount = 0;
     avoidHoldUntil = 0;
     distLeft = distRight = 999;
+    consecutiveTurns = 0;
+    oscillationCount = 0;
+    lastTurnWasLeft = false;
+    selectedValley.startIdx = 0;
+    selectedValley.endIdx = 0;
+    selectedValley.centerAngle = 90;
+    selectedValley.widthCm = 0;
+    selectedValley.depthCm = 0;
+    selectedValley.score = 0;
+    scanSampleCount = 0;
     logAvoid(avoidState);
   }
 
@@ -365,43 +533,25 @@ static inline void enterMode(Mode m) {
 }
 
 // =======================================================
-// 11) INPUT: Serial / Bluetooth (Hosyond compatible)
+// 11) INPUT: Serial / Bluetooth
 // =======================================================
 
 static inline void applyCommandChar(char c) {
-  // αγνόησε CR/LF/space
   if (c == '\r' || c == '\n' || c == ' ') return;
-
-  // κεφαλαία
-  if (c >= 'a' && c <= 'z') c = (char)(c - 'a' + 'A');
 
 #if VERBOSE
   Serial.print(F("[CMD] "));
   Serial.println(c);
 #endif
 
+  if (c >= 'a' && c <= 'z') c = (char)(c - 'a' + 'A');
+
   switch (c) {
-
-    // -------------------------
-    // Modes / Safety
-    // -------------------------
-
-    // Hosyond STOP: εδώ το κάνουμε “STOP mode” (ασφαλές και προβλέψιμο)
-    case 'S':
-      enterMode(Mode::STOP);
-      break;
-
+    case 'S': enterMode(Mode::STOP); break;
     case 'M': enterMode(Mode::MANUAL); break;
-    case 'T': enterMode(Mode::LINE);   break;
-    case 'O': enterMode(Mode::AVOID);  break;
-
-    // Hosyond: IR Control button
-    case 'I':
-      enterMode(Mode::MANUAL);
-      break;
-
-    // Hosyond: Gravity Sensor (στέλνει stream/άλλη λογική)
-    // Teacher-safe: δεν το υποστηρίζουμε -> STOP
+    case 'T': enterMode(Mode::LINE); break;
+    case 'O': enterMode(Mode::AVOID); break;
+    case 'I': enterMode(Mode::MANUAL); break;
     case 'G':
       enterMode(Mode::STOP);
 #if VERBOSE
@@ -409,34 +559,26 @@ static inline void applyCommandChar(char c) {
 #endif
       break;
 
-    // -------------------------
-    // Manual moves (Hosyond app joystick)
-    // -------------------------
     case 'U':
       if (currentMode != Mode::MANUAL) enterMode(Mode::MANUAL);
-      forward(speedManual);
-      tManualLastCmd = millis();
+      forward(speedManual); tManualLastCmd = millis();
       break;
-
     case 'D':
       if (currentMode != Mode::MANUAL) enterMode(Mode::MANUAL);
-      backward(speedManual);
-      tManualLastCmd = millis();
+      backward(speedManual); tManualLastCmd = millis();
       break;
-
     case 'L':
       if (currentMode != Mode::MANUAL) enterMode(Mode::MANUAL);
-      turnLeft(SPEED_TURN);
-      tManualLastCmd = millis();
+      turnLeft(SPEED_TURN); tManualLastCmd = millis();
       break;
-
     case 'R':
       if (currentMode != Mode::MANUAL) enterMode(Mode::MANUAL);
-      turnRight(SPEED_TURN);
-      tManualLastCmd = millis();
+      turnRight(SPEED_TURN); tManualLastCmd = millis();
+      break;
+    case 'X':
+      if (currentMode == Mode::MANUAL) { stopMotors(); tManualLastCmd = millis(); }
       break;
 
-    // legacy help
     case 'H':
       printHelp();
       break;
@@ -483,23 +625,19 @@ static inline void goManualIfNeeded() {
 static inline void applyIrCmd(uint8_t cmd) {
   lastIrCmd = cmd;
 
-  // modes
   if (cmd == IR_1) { enterMode(Mode::MANUAL); return; }
   if (cmd == IR_2) { enterMode(Mode::LINE);   return; }
   if (cmd == IR_3) { enterMode(Mode::AVOID);  return; }
   if (cmd == IR_0) { enterMode(Mode::STOP);   return; }
   if (cmd == IR_OK){ enterMode(Mode::STOP);   return; }
 
-  // speed
   if (cmd == IR_STAR) { speedAdjust(-SPEED_STEP); return; }
   if (cmd == IR_HASH) { speedAdjust(+SPEED_STEP); return; }
 
-  // trim
   if (cmd == IR_4) { trimAdjust(-TRIM_STEP); return; }
   if (cmd == IR_6) { trimAdjust(+TRIM_STEP); return; }
   if (cmd == IR_5) { trimStraight = 0; logTrimSpeed(); return; }
 
-  // motion (repeatable)
   if (cmd == IR_UP)    { goManualIfNeeded(); forward(speedManual);  tManualLastCmd = millis(); return; }
   if (cmd == IR_DOWN)  { goManualIfNeeded(); backward(speedManual); tManualLastCmd = millis(); return; }
   if (cmd == IR_LEFT)  { goManualIfNeeded(); turnLeft(SPEED_TURN);  tManualLastCmd = millis(); return; }
@@ -522,7 +660,6 @@ static inline void updateIR() {
     const uint8_t cmd = (uint8_t)((code >> 8) & 0xFF);
 
     if (repeat) {
-      // repeats μόνο σε κίνηση (όχι σε mode/speed/trim)
       if (lastIrCmd && isRepeatableMotion(lastIrCmd)) {
         goManualIfNeeded();
         tManualLastCmd = millis();
@@ -556,10 +693,8 @@ static inline void updateLine(unsigned long now) {
   const bool M = readLinePin(PIN_LINE_M);
   const bool R = readLinePin(PIN_LINE_R);
 
-  // 1) Μόνο ο μεσαίος -> ευθεία (με TRIM)
   if (M && !L && !R) { forwardTrim(SPEED_DEFAULT); return; }
 
-  // 2) Δεξί βλέπει γραμμή -> διόρθωση
   if (R && !L) {
     uint8_t leftPWM  = (uint8_t)constrain((int)SPEED_DEFAULT + (int)LINE_K, 0, 255);
     uint8_t rightPWM = (uint8_t)constrain((int)SPEED_DEFAULT - (int)LINE_K, 0, 255);
@@ -567,7 +702,6 @@ static inline void updateLine(unsigned long now) {
     return;
   }
 
-  // 3) Αριστερό βλέπει γραμμή -> διόρθωση
   if (L && !R) {
     uint8_t leftPWM  = (uint8_t)constrain((int)SPEED_DEFAULT - (int)LINE_K, 0, 255);
     uint8_t rightPWM = (uint8_t)constrain((int)SPEED_DEFAULT + (int)LINE_K, 0, 255);
@@ -575,10 +709,8 @@ static inline void updateLine(unsigned long now) {
     return;
   }
 
-  // 4) Κανένας δεν βλέπει -> stop motors
   if (!L && !M && !R) { stopMotors(); return; }
 
-  // 5) Άλλοι συνδυασμοί -> αργή ευθεία (πιο “ήπια”)
   forwardTrim(SPEED_SLOW);
 }
 
@@ -592,7 +724,6 @@ static inline uint16_t readUltrasonicCm() {
   digitalWrite(PIN_TRIG, HIGH); delayMicroseconds(10);
   digitalWrite(PIN_TRIG, LOW);
 
-  // timeout ~25ms => ~4m
   unsigned long d = pulseIn(PIN_ECHO, HIGH, 25000UL);
   if (d == 0) return 999;
   return (uint16_t)(d / 58UL);
@@ -607,7 +738,6 @@ static inline void updateSonar(unsigned long now) {
 
   distCm = readUltrasonicCm();
 
-  // invalid counter (timeouts/θόρυβος)
   if (distCm >= SONAR_INVALID_CM) {
     if (sonarInvalidCount < 255) sonarInvalidCount++;
   } else {
@@ -624,29 +754,29 @@ static inline void avoidSet(AvoidState st, unsigned long now) {
 static inline void updateAvoid(unsigned long now) {
   updateSonar(now);
 
-  // FAIL-SAFE: αν δεν “βλέπει” αξιόπιστα, σταματάμε.
   if (sonarInvalidCount >= SONAR_INVALID_LIMIT) {
     stopMotors();
 #if VERBOSE
-    LOGLN(F("[AVOID] FAIL-SAFE: SONAR INVALID -> STOP"));
+    LOGLN(F("[AVOID] FAIL-SAFE: SONAR INVALID -> FULL_SCAN"));
 #endif
+    avoidSet(AvoidState::FULL_SCAN_START, now);
     if (avoidHoldUntil == 0) avoidHoldUntil = now + AVOID_RETRY_MS;
     if (now < avoidHoldUntil) return;
-
-    // μετά το hold: ξαναδοκιμή
     avoidHoldUntil = 0;
     sonarInvalidCount = 0;
-    avoidSet(AvoidState::IDLE, now);
     return;
   }
 
-  // Step timing
   if (now - tAvoid < AVOID_STEP_INTERVAL_MS) return;
 
   switch (avoidState) {
     case AvoidState::IDLE:
-      if (distCm > OBSTACLE_NEAR_CM) forward(SPEED_DEFAULT);
-      else avoidSet(AvoidState::STOP, now);
+      if (distCm > OBSTACLE_NEAR_CM) {
+        forward(SPEED_DEFAULT);
+        consecutiveTurns = 0;
+      } else {
+        avoidSet(AvoidState::STOP, now);
+      }
       break;
 
     case AvoidState::STOP:
@@ -678,12 +808,26 @@ static inline void updateAvoid(unsigned long now) {
     case AvoidState::LOOK_R:
       if (now - tAvoid >= 180) {
         distRight = readUltrasonicCm();
-        avoidSet(AvoidState::TURN, now);
+
+        bool turnL = (distLeft >= distRight);
+        if (turnL != lastTurnWasLeft) {
+          oscillationCount++;
+        } else {
+          oscillationCount = 0;
+        }
+        lastTurnWasLeft = turnL;
+
+        consecutiveTurns++;
+
+        if (consecutiveTurns >= navConfig.maxAvoidTurns || oscillationCount >= 2) {
+          avoidSet(AvoidState::FULL_SCAN_START, now);
+        } else {
+          avoidSet(AvoidState::TURN, now);
+        }
       }
       break;
 
     case AvoidState::TURN:
-      // στρίβουμε προς την πλευρά που “έχει περισσότερο χώρο”
       if (distLeft >= distRight) turnLeft(SPEED_TURN);
       else turnRight(SPEED_TURN);
 
@@ -702,6 +846,62 @@ static inline void updateAvoid(unsigned long now) {
         avoidSet(AvoidState::IDLE, now);
       }
       break;
+
+    case AvoidState::FULL_SCAN_START:
+      stopMotors();
+      if (now - tAvoid >= 150) {
+        avoidSet(AvoidState::FULL_SCAN_IN_PROGRESS, now);
+      }
+      break;
+
+    case AvoidState::FULL_SCAN_IN_PROGRESS:
+      if (scanSampleCount == 0) {
+        performFullScan();
+        avoidSet(AvoidState::FULL_SCAN_EVALUATE, now);
+      }
+      break;
+
+    case AvoidState::FULL_SCAN_EVALUATE:
+      detectValleys();
+      if (validValleyCount > 0) {
+        scoreValleys();
+        avoidSet(AvoidState::FULL_SCAN_TURN_TO_VALLEY, now);
+      } else {
+        avoidSet(AvoidState::STRESS, now);
+      }
+      break;
+
+    case AvoidState::FULL_SCAN_TURN_TO_VALLEY:
+      {
+        int16_t angleDiff = (int16_t)selectedValley.centerAngle - 90;
+        if (angleDiff < -1) {
+          turnLeft(SPEED_TURN);
+        } else if (angleDiff > 1) {
+          turnRight(SPEED_TURN);
+        } else {
+          stopMotors();
+        }
+
+        uint16_t turnDuration = (uint16_t)(abs(angleDiff) * navConfig.turnMsPerDeg);
+        if (turnDuration == 0) turnDuration = navConfig.turnMsPerDeg;
+        if (now - tAvoid >= turnDuration) {
+          stopMotors();
+          scanSampleCount = 0;
+          consecutiveTurns = 0;
+          oscillationCount = 0;
+          avoidSet(AvoidState::IDLE, now);
+        }
+      }
+      break;
+
+    case AvoidState::STRESS:
+      backward(SPEED_SLOW);
+      if (now - tAvoid >= 600) {
+        stopMotors();
+        scanSampleCount = 0;
+        avoidSet(AvoidState::FULL_SCAN_START, now);
+      }
+      break;
   }
 }
 
@@ -713,38 +913,31 @@ void setup() {
   Serial.begin(9600);
   delay(200);
 
-  // Motors
   pinMode(PIN_LB, OUTPUT);   pinMode(PIN_LF, OUTPUT);
   pinMode(PIN_RB, OUTPUT);   pinMode(PIN_RF, OUTPUT);
   pinMode(PIN_LPWM, OUTPUT); pinMode(PIN_RPWM, OUTPUT);
 
-  // Line sensors (pullups για “ήσυχα” σήματα)
   pinMode(PIN_LINE_L, INPUT_PULLUP);
   pinMode(PIN_LINE_M, INPUT_PULLUP);
   pinMode(PIN_LINE_R, INPUT_PULLUP);
 
-  // Ultrasonic
   pinMode(PIN_TRIG, OUTPUT);
   pinMode(PIN_ECHO, INPUT);
   digitalWrite(PIN_TRIG, LOW);
 
-  // IR
 #if USE_IR
   pinMode(PIN_IR_RECV, INPUT);
 #endif
 
-  // Servo
 #if USE_SERVO
   headServo.attach(PIN_SERVO);
   headServo.write(SERVO_CENTER);
 #endif
 
-  // Bluetooth
 #if USE_BLUETOOTH
   BT.begin(9600);
 #endif
 
-  // init timers
   unsigned long now = millis();
   tLine = tSonar = tAvoid = tManualLastCmd = now;
 
@@ -752,6 +945,7 @@ void setup() {
 
 #if VERBOSE
   LOGLN(F("HOSYOND MASTER v2.6 READY (NO FOLLOW)"));
+  LOGLN(F("Enhanced Navigation with Full Scan + Valley Detect"));
   printHelp();
   logTrimSpeed();
 #endif
@@ -760,21 +954,16 @@ void setup() {
 void loop() {
   unsigned long now = millis();
 
-  // Inputs (πάντα πρώτα, για να “ακούει” αμέσως)
   updateSerial();
 #if USE_BLUETOOTH
   updateBluetooth();
 #endif
   updateIR();
 
-  // MANUAL safety: αν σταματήσουν οι εντολές, κόβουμε τα μοτέρ.
-  // (π.χ. χάθηκε Bluetooth / έπεσε το τηλέφωνο / έφυγε εκτός εμβέλειας)
   if (currentMode == Mode::MANUAL && (now - tManualLastCmd > MANUAL_TIMEOUT_MS)) {
     stopMotors();
   }
 
-  // Active mode logic
   if (currentMode == Mode::LINE)  updateLine(now);
   if (currentMode == Mode::AVOID) updateAvoid(now);
-  // STOP και MANUAL δεν έχουν “αυτόνομο loop” εδώ (MANUAL κινείται μόνο με εντολές)
 }
