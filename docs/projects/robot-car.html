@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hosyond 4WD Master v2.7</title>
+  <meta name="description" content="Εκπαιδευτικό Arduino 4WD robot car με manual, line tracking και obstacle avoidance." />
+  <link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+  <main>
+    <section class="container page-header">
+      <h1>02. Hosyond 4WD Smart Robot Car Kit · MASTER v2.7</h1>
+      <p class="lead">
+        Ολοκληρωμένο εκπαιδευτικό project για Arduino 4WD robot car με state-machine λογική,
+        τρία βασικά modes λειτουργίας και ενισχυμένο obstacle avoidance με fail-safe μηχανισμούς.
+      </p>
+    </section>
+
+    <section class="container two-col">
+      <div class="content-box">
+        <h2>Περιγραφή</h2>
+        <p>
+          Το project έχει σχεδιαστεί για σχολικά εργαστήρια ρομποτικής και μαθήματα τεχνολογίας,
+          με έμφαση στη σταθερή και προβλέψιμη συμπεριφορά μέσα στην τάξη.
+        </p>
+        <p>
+          Ολοκλήρωση της κατασκευής στον Σύλλογο Τεχνολογίας Θράκης
+        </p>
+        <p>
+          Ομάδα Κατασκευής: Κώστας Λ., Γιάννης Γ., Άρης Τ., Δημήτρης Κ.
+        </p>
+
+        <h3>Α. Modes λειτουργίας</h3>
+        <ul>
+          <li><strong>MANUAL</strong> — IR Remote, Bluetooth, Serial</li>
+          <li><strong>LINE TRACKING</strong> — 3 αισθητήρες γραμμής</li>
+          <li><strong>OBSTACLE AVOIDANCE</strong> — Ultrasonic + Servo</li>
+        </ul>
+
+        <h3>Τι προσθέτει η v2.7</h3>
+        <ul>
+          <li>Full scan 180° με servo</li>
+          <li>Valley detection για ασφαλέστερη επιλογή διαδρομής</li>
+          <li>Βαθμολόγηση ανοιγμάτων με βάση πλάτος, βάθος και γωνία</li>
+          <li>Anti-stuck λογική με <code>consecutiveTurns</code> και <code>oscillationCount</code></li>
+          <li>Κατάσταση <code>STRESS</code> όταν δεν υπάρχει ασφαλές άνοιγμα</li>
+        </ul>
+
+        <h3>Β. Παιδαγωγική αξία</h3>
+        <ul>
+          <li>State machine αρχιτεκτονική</li>
+          <li>Non-blocking προγραμματισμός</li>
+          <li>Συνδυασμός πολλαπλών αισθητήρων</li>
+          <li>Αυτόνομη λήψη αποφάσεων</li>
+          <li>Εισαγωγή σε fail-safe σχεδίαση</li>
+        </ul>
+
+        <h3>Γ. Υλικά</h3>
+        <ul>
+          <li>Arduino UNO ή συμβατό</li>
+          <li>L298N Motor Driver</li>
+          <li>3 αισθητήρες γραμμής</li>
+          <li>HC-SR04 ultrasonic sensor</li>
+          <li>Servo SG90</li>
+          <li>IR receiver + remote</li>
+          <li>Bluetooth HC-05 / HC-06</li>
+        </ul>
+
+        <h3>Δ. Βασικό pinout</h3>
+        <ul>
+          <li>L298N: D2, D4, D5, D6, D7, D8</li>
+          <li>Line sensors: D9, D10, D11</li>
+          <li>Servo: D3</li>
+          <li>Ultrasonic: A0, A1</li>
+          <li>IR receiver: D12</li>
+          <li>Bluetooth: A2, A3</li>
+        </ul>
+
+        <h3>Σημειώσεις χρήσης</h3>
+        <ul>
+          <li>Το BT RX χρειάζεται διαιρέτη τάσης</li>
+          <li>Κατά το upload αφαιρούμε προσωρινά το Bluetooth module</li>
+          <li>Προτείνεται ξεχωριστή σταθερή 5V τροφοδοσία για το servo</li>
+          <li>Όλα τα GND πρέπει να είναι κοινά</li>
+        </ul>
+      </div>
+
+      <div class="content-box">
+        <h2>Φωτογραφίες</h2>
+        <img class="preview-image" src="../assets/robot-car-preview.jpg" alt="Hosyond 4WD Master v2.7" />
+        <div class="photo-gallery">
+          <img class="gallery-image" src="../assets/Hosyond_4WD_Smart_Robot_Car_Kit_01.jpg" alt="Hosyond 4WD Smart Robot Car Kit φωτογραφία 1" />
+          <img class="gallery-image" src="../assets/Hosyond_4WD_Smart_Robot_Car_Kit_02.jpg" alt="Hosyond 4WD Smart Robot Car Kit φωτογραφία 2" />
+          <img class="gallery-image" src="../assets/Hosyond_4WD_Smart_Robot_Car_Kit_03.jpg" alt="Hosyond 4WD Smart Robot Car Kit φωτογραφία 3" />
+        </div>
+      </div>
+    </section>
+
+    <section class="container page-actions">
+      <a class="page-action page-action-secondary" href="../index.html">← Επιστροφή στο portfolio</a>
+      <a class="page-action page-action-primary" href="https://github.com/LabSchool-GR/arduino-mini-projects/tree/main/02_hosyond_4wd_master">Άνοιγμα φακέλου project στο GitHub</a>
+    </section>
+  </main>
+
+  <footer>
+     <div class="container footer-box">
+      <div>Σύλλογος Τεχνολογίας Θράκης · Arduino MakerLab</div>
+      <div>GitHub Pages portfolio για εκπαιδευτικές κατασκευές, κώδικα και τεκμηρίωση.</div>
+    </div>
+  </footer>
+</body>
+</html>

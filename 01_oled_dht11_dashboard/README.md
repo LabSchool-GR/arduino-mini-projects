@@ -8,7 +8,6 @@
 
 <p align="center">
   <img src="images/preview.jpg" alt="oled dht11 dashboard"><br>
-  <em>Μικρό Dashboard Περιβάλλοντος</em><br>
   <em>Ολοκλήρωση της κατασκευής στον Σύλλογο Τεχνολογίας Θράκης</em><br>
   <em>Ομάδα Κατασκευής: Γιάννης Γ., Άρης Τ., Δημήτρης Κ.</em>
 </p>

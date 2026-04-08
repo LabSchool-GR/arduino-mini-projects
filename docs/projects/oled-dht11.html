@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="el">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OLED DHT11 Mini Dashboard</title>
+  <meta name="description" content="Arduino project με OLED SSD1306 και DHT11 για θερμοκρασία και υγρασία." />
+  <link rel="stylesheet" href="../assets/style.css" />
+</head>
+<body>
+  <main>
+    <section class="container page-header">
+      <h1>01. OLED DHT11 Mini Dashboard</h1>
+      <p class="lead">
+        Ένα μικρό Arduino project για νέους δημιουργούς, σχεδιασμένο για εισαγωγή
+        σε αισθητήρες, OLED οθόνες και non-blocking λογική με <code>millis()</code>.
+      </p>
+    </section>
+
+    <section class="container two-col">
+      <div class="content-box">
+        <h2>Περιγραφή</h2>
+        <p>
+          Το project εμφανίζει σε OLED οθόνη 128x64 έναν scrolling τίτλο, τη θερμοκρασία
+          με ένα δεκαδικό, την υγρασία σε ποσοστό και απλά εικονίδια ένδειξης.
+        </p>
+        <p>
+          Ολοκλήρωση της κατασκευής στον Σύλλογο Τεχνολογίας Θράκης
+        </p>
+        <p>
+          Ομάδα Κατασκευής: Γιάννης Γ., Άρης Τ., Δημήτρης Κ.
+        </p>
+
+        <h3>Α. Βασικές λειτουργίες</h3>
+        <ul>
+          <li>Scrolling τίτλος στην επάνω μπάρα</li>
+          <li>Θερμοκρασία με 1 δεκαδικό</li>
+          <li>Υγρασία (%)</li>
+          <li>Εικονίδια θερμομέτρου και σταγόνας</li>
+          <li>Χωρίς <code>delay()</code>, με timers μέσω <code>millis()</code></li>
+        </ul>
+
+        <h3>Β. Εκπαιδευτική αξία</h3>
+        <ul>
+          <li>Ανάγνωση δεδομένων από αισθητήρα DHT11</li>
+          <li>Χρήση I2C με OLED SSD1306</li>
+          <li>Βασική παρουσίαση δεδομένων σε embedded οθόνη</li>
+          <li>Κατανόηση μη μπλοκαριστικού προγραμματισμού</li>
+        </ul>
+
+        <h3>Γ. Υλικά</h3>
+        <ul>
+          <li>Arduino UNO ή Nano</li>
+          <li>OLED SSD1306 128x64 (I2C, 0x3C)</li>
+          <li>DHT11</li>
+          <li>Καλώδια σύνδεσης</li>
+        </ul>
+
+        <h3>Δ. Συνδεσμολογία</h3>
+        <p><strong>OLED</strong></p>
+        <ul>
+          <li>VCC → 5V</li>
+          <li>GND → GND</li>
+          <li>SDA → A4</li>
+          <li>SCL → A5</li>
+        </ul>
+
+        <p><strong>DHT11</strong></p>
+        <ul>
+          <li>VCC → 5V</li>
+          <li>GND → GND</li>
+          <li>DATA → D2</li>
+        </ul>
+
+        <h3>Ε. Αρχεία</h3>
+        <ul>
+          <li><code>01_oled_dht11_dashboard/oled_dht11_dashboard.ino</code></li>
+          <li><code>01_oled_dht11_dashboard/README.md</code></li>
+        </ul>
+      </div>
+
+      <div class="content-box">
+        <h2>Φωτογραφίες</h2>
+        <img class="preview-image" src="../assets/oled-dht11-preview.jpg" alt="OLED DHT11 Mini Dashboard" />
+        <div class="photo-gallery">
+          <img class="gallery-image" src="../assets/oled_dht11_dashboard_01.jpg" alt="OLED DHT11 Mini Dashboard φωτογραφία 1" />
+          <img class="gallery-image" src="../assets/oled_dht11_dashboard_02.jpg" alt="OLED DHT11 Mini Dashboard φωτογραφία 2" />
+        </div>
+      </div>
+    </section>
+
+    <section class="container page-actions">
+      <a class="page-action page-action-secondary" href="../index.html">← Επιστροφή στο portfolio</a>
+      <a class="page-action page-action-primary" href="https://github.com/LabSchool-GR/arduino-mini-projects/tree/main/01_oled_dht11_dashboard">Άνοιγμα φακέλου project στο GitHub</a>
+    </section>
+  </main>
+
+  <footer>
+    <div class="container footer-box">
+      <div>Σύλλογος Τεχνολογίας Θράκης · Arduino MakerLab</div>
+      <div>GitHub Pages portfolio για εκπαιδευτικές κατασκευές, κώδικα και τεκμηρίωση.</div>
+    </div>
+  </footer>
+</body>
+</html>
