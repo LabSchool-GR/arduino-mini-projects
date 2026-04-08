@@ -1,7 +1,7 @@
 # 01 - OLED DHT11 Mini Dashboard
 
 ## Α. Φωτογραφία σύνδεσης
-![arduino_02](arduino_02.jpg)
+![OLED dashboard wiring](images/preview.jpg)
 
 
 Μικρό Arduino project για αρχάριους που εμφανίζει σε OLED 128x64:
